@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+"""
+Generate NGINX Error Pages
+"""
+import os
+import json
+
+def read_file_if_exists(file_name):
+    "Read File Contents"
+    if os.path.exists(file_name):
+        with open(file_name, "r") as file_to_read:
+            return file_to_read.read()
+    return ""
+
+def generate_error_pages():
+    "Generate Error Pages"
+    data = json.loads(read_file_if_exists("templates/http-status-code.json"))
+    style = read_file_if_exists("templates/main.css")
+    partial = read_file_if_exists("templates/partial.html")
+
+    with open("output/error_pages.conf", "w") as ep_conf:
+        for value in data["values"]:
+
+            error_code = int(value["value"])
+            error_type = str(error_code)[0:1] + "xx"
+            if error_code < 300 or error_code > 599:
+                continue
+
+            content = "" #Enter a static string to skip.
+            content = content or read_file_if_exists("templates/{}.html".format(error_code))
+            content = content or read_file_if_exists("templates/{}.html".format(error_type))
+            content = content or read_file_if_exists("templates/template.html")
+
+            template_vars = {
+                "$STYLE": style, "$PARTIAL": partial, "$ERROR_TYPE": error_type,
+                "$ERROR_CODE": str(error_code), "$ERROR_NAME": value["description"],
+                "$ERROR_DESC": value["details"][0]["description"]
+            }
+            for var_name, var_value in template_vars.items():
+                content = content.replace(var_name, var_value)
+
+            with open("output/{}.html".format(error_code), "w") as output_file:
+                output_file.write(content)
+
+            ep_conf.write("error_page {} /errors/{}.html;\n".format(error_code, error_code))
+
+if __name__ == '__main__':
+    generate_error_pages()
